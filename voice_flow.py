@@ -106,6 +106,19 @@ def run_osascript(script: str, timeout: float = 2.0) -> str:
         return ""
 
 
+def get_system_output_volume() -> int | None:
+    output = run_osascript("output volume of (get volume settings)", timeout=1.0)
+    try:
+        return max(0, min(int(output), 100))
+    except (TypeError, ValueError):
+        return None
+
+
+def set_system_output_volume(volume: int) -> None:
+    volume = max(0, min(int(volume), 100))
+    run_osascript(f"set volume output volume {volume}", timeout=1.0)
+
+
 def get_active_context() -> dict[str, str]:
     app = run_osascript('tell application "System Events" to get name of first application process whose frontmost is true')
     title = ""
@@ -461,6 +474,8 @@ class Recorder:
         self.last_level_update = 0.0
         self.current_mode = ""
         self.current_context: dict[str, str] = {}
+        self.original_output_volume: int | None = None
+        self.ducked_output_volume: int | None = None
         self.max_record_seconds = float(config.get("max_record_seconds", 180))
         self.min_record_seconds = float(config.get("min_record_seconds", 0.35))
         TMP_DIR.mkdir(exist_ok=True)
@@ -476,52 +491,101 @@ class Recorder:
             else:
                 self.start_locked(paste)
 
+    def duck_system_audio(self) -> None:
+        ducking = self.config.get("audio_ducking", {})
+        if not ducking.get("enabled", False):
+            return
+        current = get_system_output_volume()
+        if current is None:
+            return
+        factor = max(0.0, min(float(ducking.get("factor", 0.5)), 1.0))
+        target = int(round(current * factor))
+        if current > 0:
+            target = max(int(ducking.get("min_nonzero_volume", 1)), target)
+        target = min(current, max(0, min(target, 100)))
+        self.original_output_volume = current
+        self.ducked_output_volume = target
+        if target != current:
+            set_system_output_volume(target)
+
+    def restore_system_audio(self) -> None:
+        ducking = self.config.get("audio_ducking", {})
+        original = self.original_output_volume
+        self.original_output_volume = None
+        self.ducked_output_volume = None
+        if original is None or not ducking.get("restore_on_stop", True):
+            return
+        set_system_output_volume(original)
+
     def start_locked(self, paste: bool) -> None:
         self.paste_when_done = paste
         self.samples_written = 0
         self.started_at = time.time()
         self.current_mode, self.current_context = resolve_output_mode(self.config, None)
-        self.audio_path = TMP_DIR / f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-        self.wav_file = wave.open(str(self.audio_path), "wb")
-        self.wav_file.setnchannels(1)
-        self.wav_file.setsampwidth(2)
-        self.wav_file.setframerate(self.sample_rate)
+        self.duck_system_audio()
+        try:
+            self.audio_path = TMP_DIR / f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+            self.wav_file = wave.open(str(self.audio_path), "wb")
+            self.wav_file.setnchannels(1)
+            self.wav_file.setsampwidth(2)
+            self.wav_file.setframerate(self.sample_rate)
 
-        def callback(indata: np.ndarray, frames: int, time_info: Any, status: sd.CallbackFlags) -> None:
-            if status:
-                print(f"Audio warning: {status}", flush=True)
-            mono = indata
-            if mono.ndim > 1:
-                mono = mono.mean(axis=1)
-            pcm = (np.clip(mono, -1.0, 1.0) * 32767).astype(np.int16)
-            should_stop = False
+            def callback(indata: np.ndarray, frames: int, time_info: Any, status: sd.CallbackFlags) -> None:
+                if status:
+                    print(f"Audio warning: {status}", flush=True)
+                mono = indata
+                if mono.ndim > 1:
+                    mono = mono.mean(axis=1)
+                pcm = (np.clip(mono, -1.0, 1.0) * 32767).astype(np.int16)
+                should_stop = False
+                with self.file_lock:
+                    wav_file = self.wav_file
+                    if wav_file is None:
+                        return
+                    wav_file.writeframes(pcm.tobytes())
+                    self.samples_written += len(pcm)
+                    should_stop = self.max_record_seconds > 0 and self.samples_written >= self.sample_rate * self.max_record_seconds
+                now = time.time()
+                if now - self.last_level_update >= 0.06:
+                    rms = float(np.sqrt(np.mean(np.square(mono.astype(np.float32)))))
+                    level = min(1.0, rms * 9.0)
+                    write_status("recording", self.config, level=level)
+                    self.last_level_update = now
+                if should_stop:
+                    threading.Thread(target=lambda: self.toggle(self.paste_when_done), daemon=True).start()
+
+            self.stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                dtype="float32",
+                device=self.device,
+                callback=callback,
+            )
+            self.stream.start()
+            self.recording = True
+            write_status("recording", self.config, level=0.0)
+            notify(f"Recording as {self.current_mode}...", self.config)
+        except Exception:
+            stream = self.stream
+            self.stream = None
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
             with self.file_lock:
                 wav_file = self.wav_file
-                if wav_file is None:
-                    return
-                wav_file.writeframes(pcm.tobytes())
-                self.samples_written += len(pcm)
-                should_stop = self.max_record_seconds > 0 and self.samples_written >= self.sample_rate * self.max_record_seconds
-            now = time.time()
-            if now - self.last_level_update >= 0.06:
-                rms = float(np.sqrt(np.mean(np.square(mono.astype(np.float32)))))
-                level = min(1.0, rms * 9.0)
-                write_status("recording", self.config, level=level)
-                self.last_level_update = now
-            if should_stop:
-                threading.Thread(target=lambda: self.toggle(self.paste_when_done), daemon=True).start()
-
-        self.stream = sd.InputStream(
-            samplerate=self.sample_rate,
-            channels=self.channels,
-            dtype="float32",
-            device=self.device,
-            callback=callback,
-        )
-        self.stream.start()
-        self.recording = True
-        write_status("recording", self.config, level=0.0)
-        notify(f"Recording as {self.current_mode}...", self.config)
+                self.wav_file = None
+                if wav_file is not None:
+                    try:
+                        wav_file.close()
+                    except Exception:
+                        pass
+            if self.audio_path is not None:
+                safe_unlink(self.audio_path)
+                self.audio_path = None
+            self.restore_system_audio()
+            raise
 
     def stop_locked(self, paste: bool) -> None:
         stream = self.stream
@@ -542,10 +606,12 @@ class Recorder:
         if not audio_path or self.samples_written == 0 or duration < self.min_record_seconds:
             if audio_path:
                 safe_unlink(audio_path)
+            self.restore_system_audio()
             write_status("idle", self.config)
             notify("No audio captured.", self.config)
             return
 
+        self.restore_system_audio()
         self.processing = True
         write_status("processing", self.config, level=0.0)
         notify(f"Processing as {self.current_mode}...", self.config)
@@ -657,6 +723,14 @@ def run_hotkeys(config: dict[str, Any]) -> None:
     write_status("idle", config)
     record_hotkey = config.get("record_hotkey", "<cmd>+<shift>+<space>")
     copy_only_hotkey = config.get("copy_only_hotkey", "<cmd>+<shift>+c")
+
+    def stop_hotkeys(*_: Any) -> None:
+        recorder.restore_system_audio()
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, stop_hotkeys)
+    signal.signal(signal.SIGINT, stop_hotkeys)
+
     notify(
         f"Ready. Input: {recorder.device_label}; paste hotkey: {record_hotkey}; copy-only: {copy_only_hotkey}",
         config,
@@ -673,6 +747,7 @@ def run_hotkeys(config: dict[str, Any]) -> None:
     except KeyboardInterrupt:
         notify("Stopped.", config)
     finally:
+        recorder.restore_system_audio()
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
         lock_file.close()
 
@@ -700,6 +775,13 @@ def run_signal_server(config: dict[str, Any]) -> None:
     signal.signal(signal.SIGUSR1, lambda *_: enqueue(True))
     signal.signal(signal.SIGUSR2, lambda *_: enqueue(False))
 
+    def stop_server(*_: Any) -> None:
+        recorder.restore_system_audio()
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, stop_server)
+    signal.signal(signal.SIGINT, stop_server)
+
     notify(
         f"Ready. Input: {recorder.device_label}; native paste hotkey: <page_down>; native copy-only: <page_up>",
         config,
@@ -714,6 +796,7 @@ def run_signal_server(config: dict[str, Any]) -> None:
     except KeyboardInterrupt:
         notify("Stopped.", config)
     finally:
+        recorder.restore_system_audio()
         try:
             PID_FILE.unlink(missing_ok=True)
         except Exception:

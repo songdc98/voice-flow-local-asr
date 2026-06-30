@@ -13,6 +13,8 @@ The default workflow is designed for coding assistants and chat apps:
 - Press `Page Down` again to stop.
 - Voice Flow transcribes, cleans, copies, and pastes the text.
 - Press `Page Up` for copy-only mode.
+- While recording, the system output volume is temporarily ducked to make the
+  recording state obvious and reduce background media noise.
 
 ## One-Command Install
 
@@ -91,7 +93,13 @@ Supported explicit modes:
 - `raw`: ASR transcript only.
 
 Edit `config.json` to change the default mode, hotwords, corrections, retention
-policy, or model settings.
+policy, volume ducking, or model settings.
+
+The `audio_ducking` block controls the recording-time system volume reduction:
+
+- `enabled`: turn the feature on or off.
+- `factor`: target fraction of the current output volume while recording.
+- `restore_on_stop`: restore the previous output volume when recording stops.
 
 ## Key Modules
 

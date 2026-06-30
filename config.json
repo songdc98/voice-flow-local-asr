@@ -50,6 +50,12 @@
   "asr_timeout_seconds": 300,
   "llm_timeout_seconds": 120,
   "notify": false,
+  "audio_ducking": {
+    "enabled": true,
+    "factor": 0.5,
+    "restore_on_stop": true,
+    "min_nonzero_volume": 1
+  },
   "hud": {
     "enabled": true,
     "size": 56,
