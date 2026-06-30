@@ -1,0 +1,110 @@
+{
+  "record_hotkey": "<page_down>",
+  "copy_only_hotkey": "<page_up>",
+  "asr_profile": "balanced",
+  "output_mode": "auto",
+  "fallback_output_mode": "polish_zh",
+  "detail_preservation": "high",
+  "context_rules": [
+    {
+      "name": "Claude / Claude Code",
+      "output_mode": "code_prompt_en",
+      "match_any": [
+        "claude",
+        "anthropic",
+        "cloud code"
+      ]
+    },
+    {
+      "name": "Cursor / English coding agents",
+      "output_mode": "code_prompt_en",
+      "match_any": [
+        "cursor",
+        "windsurf",
+        "v0.dev",
+        "lovable"
+      ]
+    },
+    {
+      "name": "Codex / OpenAI",
+      "output_mode": "polish_zh",
+      "match_any": [
+        "codex",
+        "chatgpt",
+        "openai"
+      ]
+    }
+  ],
+  "paste_after_stop": true,
+  "sample_rate": 16000,
+  "channels": 1,
+  "audio_device": null,
+  "preferred_input_names": [
+    "DJI Mic Mini",
+    "DJI Mic",
+    "Mic Mini",
+    "DJI"
+  ],
+  "max_record_seconds": 180,
+  "min_record_seconds": 0.35,
+  "asr_timeout_seconds": 300,
+  "llm_timeout_seconds": 120,
+  "notify": false,
+  "hud": {
+    "enabled": true,
+    "size": 56,
+    "position": "bottom_center",
+    "margin_x": 34,
+    "margin_y": 56,
+    "poll_interval_seconds": 0.06
+  },
+  "retention": {
+    "keep_audio": true,
+    "max_audio_files": 3,
+    "keep_failed_audio": true,
+    "keep_logs": true,
+    "max_logs": 500,
+    "max_tmp_files": 20,
+    "max_age_days": 7
+  },
+  "hotwords": [
+    "Qwen",
+    "Qwen3-ASR",
+    "Whisper large-v3",
+    "API",
+    "OpenAI",
+    "ChatGPT",
+    "transformer",
+    "LLM",
+    "ASR",
+    "Python",
+    "PyTorch",
+    "MLX"
+  ],
+  "corrections": {
+    "Queen A S R": "Qwen ASR",
+    "Queen ASR": "Qwen ASR",
+    "Qwen A S R": "Qwen ASR",
+    "A P I": "API",
+    "Open I": "OpenAI",
+    "open eye": "OpenAI",
+    "withpe": "Whisper",
+    "withper": "Whisper"
+  },
+  "asr": {
+    "balanced": {
+      "engine": "qwen3",
+      "model": "mlx-community/Qwen3-ASR-1.7B-8bit",
+      "language": "zh",
+      "max_tokens": 1024,
+      "chunk_duration": 30
+    }
+  },
+  "llm": {
+    "enabled": true,
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "fallback_model": "mlx-community/Qwen3-1.7B-4bit",
+    "max_tokens": 700,
+    "temperature": 0
+  }
+}
