@@ -144,7 +144,7 @@
     "enabled": true,
     "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
     "fallback_model": "mlx-community/Qwen3-1.7B-4bit",
-    "max_tokens": 700,
+    "max_tokens": 1400,
     "temperature": 0
   }
 }

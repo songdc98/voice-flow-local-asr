@@ -100,10 +100,12 @@ post-processing style:
 Supported explicit modes:
 
 - `auto`: choose by active app/window context.
-- `code_prompt_en`: convert Chinese speech into a clean English coding prompt.
+- `code_prompt_en`: convert Chinese speech into a faithful, lightly polished
+  English coding prompt with low compression.
 - `code_prompt_zh`: clean the transcript into a Chinese coding prompt.
 - `polish_zh`: clean Chinese speech while preserving detail.
-- `translate_en`: translate into natural English chat text.
+- `translate_en`: translate into natural English chat text while preserving most
+  original details.
 - `bilingual`: output Chinese plus English.
 - `raw`: ASR transcript only.
 
