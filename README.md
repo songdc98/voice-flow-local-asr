@@ -16,6 +16,8 @@ The default workflow is designed for coding assistants and chat apps:
 - While recording, the system output volume is temporarily ducked to make the
   recording state obvious and reduce background media noise.
 - The HUD shows a live audio waveform and elapsed recording time.
+- Experimental voice trigger mode can wake recording with `八六八六` and stop
+  with `结束` after local template enrollment.
 
 ## One-Command Install
 
@@ -104,6 +106,36 @@ The `audio_ducking` block controls the recording-time system volume reduction:
 - `enabled`: turn the feature on or off.
 - `factor`: target fraction of the current output volume while recording.
 - `restore_on_stop`: restore the previous output volume when recording stops.
+
+## Experimental Voice Trigger
+
+The wake-word prototype uses a lightweight local template matcher instead of
+running the full ASR model all day. It listens for two locally enrolled keywords:
+
+- wake phrase: `八六八六`
+- stop phrase: `结束`
+
+Enroll templates first:
+
+```bash
+.venv/bin/python voice_flow.py --enroll-voice-trigger
+```
+
+The command records several short samples and stores only local MFCC template
+features under `voice_triggers/`. These files are ignored by Git.
+
+After enrollment, restart `Voice Flow.app`. The intended flow is:
+
+1. Click the target text box.
+2. Say `八六八六`.
+3. Wait for the HUD and volume ducking.
+4. Speak the message.
+5. Say `结束`.
+6. Voice Flow stops recording, transcribes, cleans, copies, and pastes.
+
+`Page Down` and `Page Up` remain available as reliable fallback controls. The
+voice trigger is still experimental: speaker audio, room acoustics, microphone
+placement, and enrollment quality can affect false wakes and missed detections.
 
 ## Key Modules
 

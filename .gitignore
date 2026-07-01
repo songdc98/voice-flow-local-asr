@@ -6,6 +6,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .build/
+backups/
 
 tmp/*
 !tmp/.gitkeep
@@ -15,6 +16,11 @@ voice_flow_status.json
 paste_request.json
 paste_status.json
 native_hotkeys.json
+
+voice_triggers/**/*.npy
+voice_triggers/**/*.wav
+voice_triggers/**/*.json
+!voice_triggers/README.md
 
 logs/*.json
 logs/*.out

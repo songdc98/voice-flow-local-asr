@@ -56,6 +56,26 @@
     "restore_on_stop": true,
     "min_nonzero_volume": 1
   },
+  "voice_trigger": {
+    "enabled": true,
+    "templates_dir": "voice_triggers",
+    "wake_keyword": "wake",
+    "stop_keyword": "stop",
+    "wake_phrase": "八六八六",
+    "stop_phrase": "结束",
+    "enrollment_samples": 4,
+    "enrollment_seconds": 1.4,
+    "vad_start_rms": 0.025,
+    "vad_stop_rms": 0.012,
+    "min_phrase_seconds": 0.35,
+    "max_phrase_seconds": 1.8,
+    "silence_end_seconds": 0.3,
+    "cooldown_seconds": 1.2,
+    "stop_min_record_seconds": 1.0,
+    "default_threshold": 42.0,
+    "minimum_threshold": 24.0,
+    "thresholds": {}
+  },
   "hud": {
     "enabled": true,
     "size": 112,

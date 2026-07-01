@@ -15,12 +15,20 @@ import wave
 from collections import deque
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pyperclip
 import sounddevice as sd
 from pynput import keyboard
+from voice_trigger import (
+    KeywordMatcher,
+    MatchResult,
+    StreamingKeywordDetector,
+    WakeMonitor,
+    record_fixed_duration,
+    save_keyword_template,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -49,6 +57,27 @@ def retention_config(config: dict[str, Any]) -> dict[str, Any]:
 def load_config() -> dict[str, Any]:
     with CONFIG_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def voice_trigger_config(config: dict[str, Any]) -> dict[str, Any]:
+    defaults = {
+        "enabled": False,
+        "templates_dir": "voice_triggers",
+        "wake_keyword": "wake",
+        "stop_keyword": "stop",
+        "wake_phrase": "八六八六",
+        "stop_phrase": "结束",
+        "enrollment_samples": 4,
+        "enrollment_seconds": 1.4,
+        "stop_min_record_seconds": 1.0,
+    }
+    defaults.update(config.get("voice_trigger", {}))
+    return defaults
+
+
+def voice_trigger_templates_dir(config: dict[str, Any]) -> Path:
+    trigger_config = voice_trigger_config(config)
+    return BASE_DIR / str(trigger_config.get("templates_dir", "voice_triggers"))
 
 
 def notify(message: str, config: dict[str, Any]) -> None:
@@ -310,6 +339,9 @@ def run_asr(audio_path: Path, config: dict[str, Any], profile: str | None = None
 def build_prompt(transcript: str, config: dict[str, Any], mode: str) -> str:
     hotwords = ", ".join(config.get("hotwords", []))
     detail_level = config.get("detail_preservation", "high")
+    trigger_config = voice_trigger_config(config)
+    wake_phrase = trigger_config.get("wake_phrase", "八六八六")
+    stop_phrase = trigger_config.get("stop_phrase", "结束")
     if mode == "raw":
         return transcript
     if mode == "polish_zh":
@@ -334,6 +366,7 @@ def build_prompt(transcript: str, config: dict[str, Any], mode: str) -> str:
 - 细节保留等级：{detail_level}。不要总结，不要压缩成任务清单，不要替用户规划方案；保留用户明确说出的目标、约束、原因、担忧、例子、对比、偏好、否定条件和不确定性。
 - 可以合并相邻的重复短句，但不能删除任何实质性信息。
 - 可以整理标点和分段，但不要改变原意和信息顺序。
+- 如果语音稿开头或结尾包含语音控制词“{wake_phrase}”或“{stop_phrase}”，删除这些控制词，不要把它们当作用户正文。
 - 严禁添加用户没有明确说出的实现语言、框架、测试指标、JSON 格式、API 设计、验收标准、实验计划或新需求。
 
 语音识别稿：
@@ -484,8 +517,19 @@ class Recorder:
         self.current_context: dict[str, str] = {}
         self.original_output_volume: int | None = None
         self.ducked_output_volume: int | None = None
+        self.keyword_matcher: KeywordMatcher | None = None
+        self.stop_detector: StreamingKeywordDetector | None = None
+        self.on_before_recording_start: Callable[[], None] | None = None
+        self.on_recording_stopped: Callable[[], None] | None = None
         self.max_record_seconds = float(config.get("max_record_seconds", 180))
         self.min_record_seconds = float(config.get("min_record_seconds", 0.35))
+        trigger_config = voice_trigger_config(config)
+        if trigger_config.get("enabled", False):
+            self.keyword_matcher = KeywordMatcher(
+                voice_trigger_templates_dir(config),
+                self.sample_rate,
+                trigger_config,
+            )
         TMP_DIR.mkdir(exist_ok=True)
         cleanup_runtime_files(config)
 
@@ -525,7 +569,40 @@ class Recorder:
             return
         set_system_output_volume(original)
 
+    def start_stop_detector(self) -> None:
+        trigger_config = voice_trigger_config(self.config)
+        if not trigger_config.get("enabled", False) or self.keyword_matcher is None:
+            return
+        stop_keyword = str(trigger_config.get("stop_keyword", "stop"))
+        if not self.keyword_matcher.has_keyword(stop_keyword):
+            return
+
+        def on_stop_detected(result: MatchResult) -> None:
+            if time.time() - self.started_at < float(trigger_config.get("stop_min_record_seconds", 1.0)):
+                return
+            print(
+                f"Voice stop detected: {result.score:.2f} / {result.threshold:.2f}",
+                flush=True,
+            )
+            threading.Thread(target=lambda: self.toggle(self.paste_when_done), daemon=True).start()
+
+        self.stop_detector = StreamingKeywordDetector(
+            self.keyword_matcher,
+            stop_keyword,
+            trigger_config,
+            on_stop_detected,
+        )
+        self.stop_detector.start()
+
+    def stop_stop_detector(self) -> None:
+        detector = self.stop_detector
+        self.stop_detector = None
+        if detector is not None:
+            detector.stop()
+
     def start_locked(self, paste: bool) -> None:
+        if self.on_before_recording_start is not None:
+            self.on_before_recording_start()
         self.paste_when_done = paste
         self.samples_written = 0
         self.started_at = time.time()
@@ -564,6 +641,9 @@ class Recorder:
                         elapsed_seconds=now - self.started_at,
                     )
                     self.last_level_update = now
+                detector = self.stop_detector
+                if detector is not None:
+                    detector.accept_audio(mono.copy())
                 if should_stop:
                     threading.Thread(target=lambda: self.toggle(self.paste_when_done), daemon=True).start()
 
@@ -575,10 +655,12 @@ class Recorder:
                 callback=callback,
             )
             self.stream.start()
+            self.start_stop_detector()
             self.recording = True
             write_status("recording", self.config, level=0.0, elapsed_seconds=0.0)
             notify(f"Recording as {self.current_mode}...", self.config)
         except Exception:
+            self.stop_stop_detector()
             stream = self.stream
             self.stream = None
             if stream is not None:
@@ -601,6 +683,7 @@ class Recorder:
             raise
 
     def stop_locked(self, paste: bool) -> None:
+        self.stop_stop_detector()
         stream = self.stream
         self.stream = None
         self.recording = False
@@ -614,6 +697,8 @@ class Recorder:
             self.wav_file = None
             if wav_file is not None:
                 wav_file.close()
+        if self.on_recording_stopped is not None:
+            self.on_recording_stopped()
 
         duration = self.samples_written / self.sample_rate if self.sample_rate else 0
         if not audio_path or self.samples_written == 0 or duration < self.min_record_seconds:
@@ -703,6 +788,80 @@ def resolve_audio_device(config: dict[str, Any]) -> tuple[int | str | None, str]
     return None, "system default input"
 
 
+class VoiceTriggerController:
+    def __init__(self, config: dict[str, Any], recorder: Recorder) -> None:
+        self.config = config
+        self.recorder = recorder
+        self.trigger_config = voice_trigger_config(config)
+        self.monitor: WakeMonitor | None = None
+        self.enabled = bool(self.trigger_config.get("enabled", False))
+        if not self.enabled or recorder.keyword_matcher is None:
+            return
+        wake_keyword = str(self.trigger_config.get("wake_keyword", "wake"))
+
+        def on_wake_detected(result: MatchResult) -> None:
+            if self.recorder.recording or self.recorder.processing:
+                return
+            print(
+                f"Voice wake detected: {result.score:.2f} / {result.threshold:.2f}",
+                flush=True,
+            )
+            self.stop()
+            threading.Thread(target=lambda: self.recorder.toggle(True), daemon=True).start()
+
+        self.monitor = WakeMonitor(
+            recorder.keyword_matcher,
+            wake_keyword,
+            self.trigger_config,
+            recorder.device,
+            recorder.channels,
+            on_wake_detected,
+        )
+
+    def start(self) -> None:
+        if self.monitor is None or self.recorder.recording:
+            return
+        try:
+            self.monitor.start()
+        except Exception as exc:
+            print(f"Voice trigger monitor failed: {exc}", flush=True)
+
+    def stop(self) -> None:
+        if self.monitor is not None:
+            self.monitor.stop()
+
+
+def enroll_voice_trigger(config: dict[str, Any]) -> None:
+    trigger_config = voice_trigger_config(config)
+    templates_dir = voice_trigger_templates_dir(config)
+    sample_rate = int(config.get("sample_rate", 16000))
+    channels = int(config.get("channels", 1))
+    device, device_label = resolve_audio_device(config)
+    samples = int(trigger_config.get("enrollment_samples", 4))
+    seconds = float(trigger_config.get("enrollment_seconds", 1.4))
+    phrases = [
+        (str(trigger_config.get("wake_keyword", "wake")), str(trigger_config.get("wake_phrase", "八六八六"))),
+        (str(trigger_config.get("stop_keyword", "stop")), str(trigger_config.get("stop_phrase", "结束"))),
+    ]
+
+    print(f"Input device: {device_label}", flush=True)
+    print("This records local keyword templates only. Raw audio is not saved.", flush=True)
+    for keyword, phrase in phrases:
+        print(f"\nKeyword: {phrase}", flush=True)
+        for index in range(1, samples + 1):
+            input(f"Press Enter, then say '{phrase}' clearly ({index}/{samples})...")
+            time.sleep(0.25)
+            audio = record_fixed_duration(sample_rate, channels, device, seconds)
+            path = save_keyword_template(templates_dir, keyword, audio, sample_rate, index)
+            print(f"Saved template: {path}", flush=True)
+
+    matcher = KeywordMatcher(templates_dir, sample_rate, trigger_config)
+    for keyword, phrase in phrases:
+        if matcher.has_keyword(keyword):
+            print(f"Threshold for {phrase}: {matcher.threshold_for(keyword):.2f}", flush=True)
+    print("Voice trigger enrollment complete. Restart Voice Flow to use it.", flush=True)
+
+
 def ensure_accessibility_prompt() -> None:
     try:
         from ApplicationServices import (  # type: ignore
@@ -733,6 +892,9 @@ def run_hotkeys(config: dict[str, Any]) -> None:
         return
 
     recorder = Recorder(config)
+    voice_controller = VoiceTriggerController(config, recorder)
+    recorder.on_before_recording_start = voice_controller.stop
+    recorder.on_recording_stopped = voice_controller.start
     write_status("idle", config)
     record_hotkey = config.get("record_hotkey", "<cmd>+<shift>+<space>")
     copy_only_hotkey = config.get("copy_only_hotkey", "<cmd>+<shift>+c")
@@ -748,6 +910,7 @@ def run_hotkeys(config: dict[str, Any]) -> None:
         f"Ready. Input: {recorder.device_label}; paste hotkey: {record_hotkey}; copy-only: {copy_only_hotkey}",
         config,
     )
+    voice_controller.start()
     ensure_accessibility_prompt()
     try:
         with keyboard.GlobalHotKeys(
@@ -760,6 +923,7 @@ def run_hotkeys(config: dict[str, Any]) -> None:
     except KeyboardInterrupt:
         notify("Stopped.", config)
     finally:
+        voice_controller.stop()
         recorder.restore_system_audio()
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
         lock_file.close()
@@ -774,6 +938,9 @@ def run_signal_server(config: dict[str, Any]) -> None:
         return
 
     recorder = Recorder(config)
+    voice_controller = VoiceTriggerController(config, recorder)
+    recorder.on_before_recording_start = voice_controller.stop
+    recorder.on_recording_stopped = voice_controller.start
     write_status("idle", config)
     PID_FILE = BASE_DIR / "voice_flow.pid"
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
@@ -799,6 +966,7 @@ def run_signal_server(config: dict[str, Any]) -> None:
         f"Ready. Input: {recorder.device_label}; native paste hotkey: <page_down>; native copy-only: <page_up>",
         config,
     )
+    voice_controller.start()
 
     try:
         while True:
@@ -809,6 +977,7 @@ def run_signal_server(config: dict[str, Any]) -> None:
     except KeyboardInterrupt:
         notify("Stopped.", config)
     finally:
+        voice_controller.stop()
         recorder.restore_system_audio()
         try:
             PID_FILE.unlink(missing_ok=True)
@@ -831,6 +1000,7 @@ def main() -> int:
     parser.add_argument("--no-clipboard", action="store_true", help="Print only; do not copy or paste.")
     parser.add_argument("--list-devices", action="store_true", help="List audio devices and exit.")
     parser.add_argument("--signal-server", action="store_true", help="Use macOS app-native hotkeys via signals.")
+    parser.add_argument("--enroll-voice-trigger", action="store_true", help="Record local templates for wake/stop words.")
     args = parser.parse_args()
 
     if args.list_devices:
@@ -838,6 +1008,10 @@ def main() -> int:
         return 0
 
     config = load_config()
+    if args.enroll_voice_trigger:
+        enroll_voice_trigger(config)
+        return 0
+
     if args.profile:
         if args.profile not in config.get("asr", {}):
             parser.error(f"unknown ASR profile: {args.profile}")
