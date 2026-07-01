@@ -17,7 +17,7 @@ The default workflow is designed for coding assistants and chat apps:
   recording state obvious and reduce background media noise.
 - The HUD shows a live audio waveform and elapsed recording time.
 - Experimental voice trigger mode can wake recording with `八六八六` and stop
-  with `结束` after local template enrollment.
+  with `结束`.
 
 ## One-Command Install
 
@@ -48,6 +48,7 @@ macOS privacy permissions cannot be granted by a script. After the app opens,
 grant:
 
 - Microphone permission.
+- Speech Recognition permission.
 - Accessibility permission in System Settings -> Privacy & Security -> Accessibility.
 
 ## Daily Use
@@ -109,22 +110,14 @@ The `audio_ducking` block controls the recording-time system volume reduction:
 
 ## Experimental Voice Trigger
 
-The wake-word prototype uses a lightweight local template matcher instead of
-running the full ASR model all day. It listens for two locally enrolled keywords:
+The wake-word prototype is built into `Voice Flow.app`. It uses macOS command
+recognition for two commands and does not save wake-word audio, templates, or
+trigger logs:
 
 - wake phrase: `八六八六`
 - stop phrase: `结束`
 
-Enroll templates first:
-
-```bash
-.venv/bin/python voice_flow.py --enroll-voice-trigger
-```
-
-The command records several short samples and stores only local MFCC template
-features under `voice_triggers/`. These files are ignored by Git.
-
-After enrollment, restart `Voice Flow.app`. The intended flow is:
+The intended flow is:
 
 1. Click the target text box.
 2. Say `八六八六`.
@@ -135,7 +128,8 @@ After enrollment, restart `Voice Flow.app`. The intended flow is:
 
 `Page Down` and `Page Up` remain available as reliable fallback controls. The
 voice trigger is still experimental: speaker audio, room acoustics, microphone
-placement, and enrollment quality can affect false wakes and missed detections.
+placement, and macOS command-recognition behavior can affect false wakes and
+missed detections.
 
 ## Key Modules
 
@@ -144,9 +138,10 @@ placement, and enrollment quality can affect false wakes and missed detections.
 - `voice_flow_menu_app.py`: PyObjC helper process that launches the worker,
   manages the lightweight recording HUD, and keeps the Python service alive.
 - `macos/voice_flow_app_launcher.m`: native Cocoa Dock app. It requests
-  microphone permission, registers Page Down/Page Up global hotkeys, sends
-  signals to the Python worker, watches paste requests, and performs
-  Accessibility-based paste with a Command-V fallback.
+  microphone and speech-recognition permissions, registers Page Down/Page Up
+  global hotkeys, listens for the two local voice commands, sends signals to
+  the Python worker, watches paste requests, and performs Accessibility-based
+  paste with a Command-V fallback.
 - `macos/generate_voice_flow_icons.py`: creates the app icon and status assets
   from the checked-in source image.
 - `scripts/install_macos.sh`: one-command local installer.
@@ -166,6 +161,7 @@ The native app handles OS integration:
 
 - Dock presence.
 - Microphone permission.
+- Speech Recognition permission for the two fixed voice commands.
 - native Carbon global hotkeys.
 - Accessibility paste.
 - app lifecycle and quit behavior.

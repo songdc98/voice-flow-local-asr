@@ -67,8 +67,9 @@ Installed: $APP_DIR
 Next steps:
 1. Open Voice Flow.app.
 2. Grant Microphone permission when macOS asks.
-3. Open System Settings -> Privacy & Security -> Accessibility, then enable Voice Flow.app.
-4. Click any text box, press Page Down to start recording, and press Page Down again to stop and paste.
+3. Grant Speech Recognition permission if macOS asks.
+4. Open System Settings -> Privacy & Security -> Accessibility, then enable Voice Flow.app.
+5. Click any text box, press Page Down to start recording, and press Page Down again to stop and paste.
 
 EOF
 }
