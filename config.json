@@ -58,7 +58,11 @@
   },
   "voice_trigger": {
     "enabled": true,
-    "wake_phrase": "八六八六",
+    "wake_phrases": [
+      "hey siri",
+      "hei siri",
+      "siri"
+    ],
     "stop_phrase": "结束"
   },
   "hud": {

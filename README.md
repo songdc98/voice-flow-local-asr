@@ -16,7 +16,7 @@ The default workflow is designed for coding assistants and chat apps:
 - While recording, the system output volume is temporarily ducked to make the
   recording state obvious and reduce background media noise.
 - The HUD shows a live audio waveform and elapsed recording time.
-- Experimental voice trigger mode can wake recording with `八六八六` and stop
+- Experimental voice trigger mode can wake recording with `hey siri` / `siri` and stop
   with `结束`.
 
 ## One-Command Install
@@ -114,13 +114,13 @@ The wake-word prototype is built into `Voice Flow.app`. It uses macOS command
 recognition for two commands and does not save wake-word audio, templates, or
 trigger logs:
 
-- wake phrase: `八六八六`
+- wake phrases: `hey siri`, `hei siri`, `siri`
 - stop phrase: `结束`
 
 The intended flow is:
 
 1. Click the target text box.
-2. Say `八六八六`.
+2. Say `hey siri` or `siri`.
 3. Wait for the HUD and volume ducking.
 4. Speak the message.
 5. Say `结束`.

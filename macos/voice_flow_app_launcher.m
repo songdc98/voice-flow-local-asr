@@ -10,7 +10,7 @@
 @property(nonatomic, assign) EventHotKeyRef copyHotKey;
 @property(nonatomic, assign) NSTimeInterval lastPasteRequestTime;
 @property(nonatomic, copy) NSString *projectDir;
-@property(nonatomic, copy) NSString *wakePhrase;
+@property(nonatomic, copy) NSArray<NSString *> *wakePhrases;
 @property(nonatomic, copy) NSString *stopPhrase;
 - (void)sendVoiceSignal:(int)signalNumber;
 @end
@@ -90,9 +90,24 @@ static OSStatus VoiceFlowHotKeyHandler(
 
 - (void)loadVoiceTriggerPhrases {
     NSDictionary *voiceTrigger = [self voiceTriggerConfig];
-    NSString *wake = voiceTrigger[@"wake_phrase"];
+    NSMutableArray<NSString *> *phrases = [NSMutableArray array];
+    id configuredPhrases = voiceTrigger[@"wake_phrases"];
+    if ([configuredPhrases isKindOfClass:[NSArray class]]) {
+        for (id item in configuredPhrases) {
+            if ([item isKindOfClass:[NSString class]] && [item length] > 0 && ![phrases containsObject:item]) {
+                [phrases addObject:item];
+            }
+        }
+    }
+    NSString *legacyWake = voiceTrigger[@"wake_phrase"];
+    if (legacyWake.length > 0 && ![phrases containsObject:legacyWake]) {
+        [phrases addObject:legacyWake];
+    }
+    if (phrases.count == 0) {
+        [phrases addObjectsFromArray:@[@"hey siri", @"siri"]];
+    }
     NSString *stop = voiceTrigger[@"stop_phrase"];
-    self.wakePhrase = wake.length > 0 ? wake : @"八六八六";
+    self.wakePhrases = phrases;
     self.stopPhrase = stop.length > 0 ? stop : @"结束";
 }
 
@@ -140,7 +155,7 @@ static OSStatus VoiceFlowHotKeyHandler(
         return;
     }
 
-    self.speechRecognizer.commands = @[self.wakePhrase, self.stopPhrase];
+    self.speechRecognizer.commands = [self.wakePhrases arrayByAddingObject:self.stopPhrase];
     self.speechRecognizer.delegate = self;
     self.speechRecognizer.listensInForegroundOnly = NO;
     [self.speechRecognizer startListening];
@@ -159,7 +174,7 @@ static OSStatus VoiceFlowHotKeyHandler(
 - (void)speechRecognizer:(NSSpeechRecognizer *)sender didRecognizeCommand:(NSString *)command {
     (void)sender;
     NSString *state = [self currentVoiceFlowState];
-    if ([command isEqualToString:self.wakePhrase]) {
+    if ([self.wakePhrases containsObject:command]) {
         if (![state isEqualToString:@"recording"] && ![state isEqualToString:@"processing"]) {
             [self sendVoiceSignal:SIGUSR1];
         }
