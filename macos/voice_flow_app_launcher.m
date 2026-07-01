@@ -58,6 +58,17 @@ static OSStatus VoiceFlowHotKeyHandler(
     return [self.projectDir stringByAppendingPathComponent:relativePath];
 }
 
+- (NSString *)pathInRuntime:(NSString *)filename {
+    return [[self pathInProject:@"runtime"] stringByAppendingPathComponent:filename];
+}
+
+- (void)ensureRuntimeDirectory {
+    [[NSFileManager defaultManager] createDirectoryAtPath:[self pathInProject:@"runtime"]
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+}
+
 - (NSDictionary *)configDictionary {
     NSData *data = [NSData dataWithContentsOfFile:[self pathInProject:@"config.json"]];
     if (data == nil) {
@@ -129,7 +140,7 @@ static OSStatus VoiceFlowHotKeyHandler(
 }
 
 - (NSString *)currentVoiceFlowState {
-    NSData *data = [NSData dataWithContentsOfFile:[self pathInProject:@"voice_flow_status.json"]];
+    NSData *data = [NSData dataWithContentsOfFile:[self pathInRuntime:@"voice_flow_status.json"]];
     if (data == nil) {
         return @"idle";
     }
@@ -147,7 +158,7 @@ static OSStatus VoiceFlowHotKeyHandler(
 }
 
 - (pid_t)voiceFlowPID {
-    NSString *pidPath = [self pathInProject:@"voice_flow.pid"];
+    NSString *pidPath = [self pathInRuntime:@"voice_flow.pid"];
     NSString *pidText = [NSString stringWithContentsOfFile:pidPath
                                                   encoding:NSUTF8StringEncoding
                                                      error:nil];
@@ -246,7 +257,7 @@ static OSStatus VoiceFlowHotKeyHandler(
         (int)recordStatus,
         (int)copyStatus
     ];
-    [statusText writeToFile:[self pathInProject:@"native_hotkeys.json"]
+    [statusText writeToFile:[self pathInRuntime:@"native_hotkeys.json"]
                  atomically:YES
                    encoding:NSUTF8StringEncoding
                       error:nil];
@@ -269,7 +280,7 @@ static OSStatus VoiceFlowHotKeyHandler(
     NSData *data = [NSJSONSerialization dataWithJSONObject:payload
                                                    options:0
                                                      error:nil];
-    [data writeToFile:[self pathInProject:@"paste_status.json"]
+    [data writeToFile:[self pathInRuntime:@"paste_status.json"]
            atomically:YES];
 }
 
@@ -350,7 +361,7 @@ static OSStatus VoiceFlowHotKeyHandler(
 
 - (void)checkPasteRequest:(NSTimer *)timer {
     (void)timer;
-    NSString *path = [self pathInProject:@"paste_request.json"];
+    NSString *path = [self pathInRuntime:@"paste_request.json"];
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (data == nil) {
         return;
@@ -376,7 +387,7 @@ static OSStatus VoiceFlowHotKeyHandler(
 }
 
 - (void)ignoreExistingPasteRequest {
-    NSString *path = [self pathInProject:@"paste_request.json"];
+    NSString *path = [self pathInRuntime:@"paste_request.json"];
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (data == nil) {
         return;
@@ -433,6 +444,7 @@ static OSStatus VoiceFlowHotKeyHandler(
         [NSApp terminate:nil];
         return;
     }
+    [self ensureRuntimeDirectory];
     [self ignoreExistingPasteRequest];
     [self requestAccessibilityPrompt];
     [self installHotKeys];
@@ -447,6 +459,7 @@ static OSStatus VoiceFlowHotKeyHandler(
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     (void)notification;
     self.projectDir = [self resolvedProjectDir];
+    [self ensureRuntimeDirectory];
 
     AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
     if (status == AVAuthorizationStatusAuthorized) {

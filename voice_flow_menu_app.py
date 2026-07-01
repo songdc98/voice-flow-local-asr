@@ -41,9 +41,10 @@ BASE_DIR = Path(__file__).resolve().parent
 PYTHON = BASE_DIR / ".venv/bin/python"
 VOICE_FLOW = BASE_DIR / "voice_flow.py"
 LOG_DIR = BASE_DIR / "logs"
-PID_FILE = BASE_DIR / "voice_flow.pid"
+RUNTIME_DIR = BASE_DIR / "runtime"
+PID_FILE = RUNTIME_DIR / "voice_flow.pid"
 CONFIG_PATH = BASE_DIR / "config.json"
-STATUS_PATH = BASE_DIR / "voice_flow_status.json"
+STATUS_PATH = RUNTIME_DIR / "voice_flow_status.json"
 
 
 def load_config() -> dict:
@@ -151,6 +152,7 @@ class VoiceFlowApp(NSObject):
     def applicationDidFinishLaunching_(self, notification):
         self.config = load_config()
         LOG_DIR.mkdir(exist_ok=True)
+        RUNTIME_DIR.mkdir(exist_ok=True)
         self.build_hud()
         self.start_child()
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(

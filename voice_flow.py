@@ -27,9 +27,11 @@ BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.json"
 TMP_DIR = BASE_DIR / "tmp"
 LOG_DIR = BASE_DIR / "logs"
-LOCK_PATH = BASE_DIR / "voice_flow.lock"
-STATUS_PATH = BASE_DIR / "voice_flow_status.json"
-PASTE_REQUEST_PATH = BASE_DIR / "paste_request.json"
+RUNTIME_DIR = BASE_DIR / "runtime"
+LOCK_PATH = RUNTIME_DIR / "voice_flow.lock"
+PID_PATH = RUNTIME_DIR / "voice_flow.pid"
+STATUS_PATH = RUNTIME_DIR / "voice_flow_status.json"
+PASTE_REQUEST_PATH = RUNTIME_DIR / "paste_request.json"
 
 
 def retention_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -49,6 +51,10 @@ def retention_config(config: dict[str, Any]) -> dict[str, Any]:
 def load_config() -> dict[str, Any]:
     with CONFIG_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def ensure_runtime_dir() -> None:
+    RUNTIME_DIR.mkdir(exist_ok=True)
 
 
 def voice_trigger_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -495,6 +501,7 @@ def copy_and_maybe_paste(text: str, paste: bool, copy: bool = True) -> None:
     if not paste:
         return
     if os.environ.get("VOICE_FLOW_NATIVE_PASTE") == "1":
+        ensure_runtime_dir()
         payload = {
             "id": uuid.uuid4().hex,
             "updated_at": time.time(),
@@ -571,6 +578,7 @@ class Recorder:
         self.ducked_output_volume: int | None = None
         self.max_record_seconds = float(config.get("max_record_seconds", 180))
         self.min_record_seconds = float(config.get("min_record_seconds", 0.35))
+        ensure_runtime_dir()
         TMP_DIR.mkdir(exist_ok=True)
         cleanup_runtime_files(config)
 
@@ -810,6 +818,7 @@ def ensure_accessibility_prompt() -> None:
 
 
 def run_hotkeys(config: dict[str, Any]) -> None:
+    ensure_runtime_dir()
     lock_file = LOCK_PATH.open("w")
     try:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -851,6 +860,7 @@ def run_hotkeys(config: dict[str, Any]) -> None:
 
 
 def run_signal_server(config: dict[str, Any]) -> None:
+    ensure_runtime_dir()
     lock_file = LOCK_PATH.open("w")
     try:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -860,8 +870,7 @@ def run_signal_server(config: dict[str, Any]) -> None:
 
     recorder = Recorder(config)
     write_status("idle", config)
-    PID_FILE = BASE_DIR / "voice_flow.pid"
-    PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
 
     pending: deque[bool] = deque()
     event = threading.Event()
@@ -895,7 +904,7 @@ def run_signal_server(config: dict[str, Any]) -> None:
     finally:
         recorder.restore_system_audio()
         try:
-            PID_FILE.unlink(missing_ok=True)
+            PID_PATH.unlink(missing_ok=True)
         except Exception:
             pass
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)

@@ -62,6 +62,17 @@ grant:
 
 Voice Flow does not show a menu bar icon. The running indicator is the Dock dot.
 
+## System Indicators
+
+Voice Flow does not draw its own desktop microphone icon. The transient HUD is
+the capture-ball indicator that appears only while recording or processing.
+
+macOS may still show system microphone or speech-recognition indicators while
+the app is listening for voice commands or recording. Those indicators are
+controlled by macOS privacy protections and cannot be hidden by the app through
+normal APIs. To remove them completely, disable `voice_trigger.enabled` in
+`config.json` and use `Page Down` instead of always-on voice wake.
+
 ## Default Models
 
 ASR:
@@ -188,6 +199,8 @@ processing easy to change.
   content and local paths.
 - Temporary audio is written to `tmp/`.
 - By default, only the newest three `voice_*.wav` files are retained.
+- Runtime state files such as PID, HUD status, paste requests, and paste
+  diagnostics are written to ignored `runtime/`.
 - No paid cloud ASR or LLM API is used by the default pipeline.
 - Hugging Face / MLX model downloads are still external network downloads on
   first use.
@@ -199,7 +212,8 @@ If recording works but text does not paste:
 1. Confirm Voice Flow is enabled in Accessibility.
 2. Quit and reopen `Voice Flow.app`.
 3. Click the target text box before pressing `Page Down`.
-4. Check `paste_status.json` for the last paste method and Accessibility status.
+4. Check `runtime/paste_status.json` for the last paste method and
+   Accessibility status.
 
 If the app does not start:
 

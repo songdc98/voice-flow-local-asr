@@ -125,12 +125,12 @@ Decision:
   permission.
 - First attempt `AXSelectedText` insertion.
 - Fall back to a synthetic Command-V event.
-- Write `paste_status.json` for diagnostics.
+- Write `runtime/paste_status.json` for diagnostics.
 
 Representative output:
 
 - Paste started working after Accessibility was granted to `Voice Flow.app`.
-- `paste_status.json` records the last paste method and trust status.
+- `runtime/paste_status.json` records the last paste method and trust status.
 
 ## Stage 7: HUD and Visual Design
 
@@ -167,6 +167,8 @@ Decision:
 - Keep the final MLX/Qwen3 pipeline.
 - Remove old FunASR runtime binaries and model downloads from the release tree.
 - Keep raw local runtime logs on disk but exclude them from Git.
+- Move transient PID, HUD status, paste requests, and paste diagnostics into an
+  ignored `runtime/` directory.
 - Publish a public-safe English exploration log.
 - Add a one-command macOS installer.
 
@@ -176,3 +178,34 @@ Representative output:
   local `.venv`.
 - Final release files are source code, macOS app source/assets, installer
   scripts, config, docs, and local-log placeholders.
+
+## Stage 9: Voice Wake Prototype
+
+Problem:
+
+- The user wanted hands-free recording without moving from mouse to keyboard.
+- Chinese stop command recognition was unstable in macOS command recognition.
+- The stop command is spoken during recording, so it can appear in the ASR
+  transcript.
+- macOS shows system microphone or speech-recognition indicators while an app is
+  listening.
+
+Decision:
+
+- Integrate the listener into `Voice Flow.app` instead of running a separate
+  monitor script.
+- Use macOS `NSSpeechRecognizer` for fixed commands so the wake layer saves no
+  audio, templates, or trigger logs.
+- Use English command phrases that the system recognizer handles more reliably:
+  `siri`, `hey siri`, `siri stop`, and `stop siri`.
+- Keep `Page Down` as the reliable fallback.
+- Strip wake/stop control phrases at transcript boundaries after ASR and again
+  after LLM post-processing.
+- Document that macOS privacy indicators cannot be hidden by the app through
+  normal APIs.
+
+Representative output:
+
+- `siri` wakes recording.
+- `siri stop` stops recording more reliably than the Chinese `结束` command.
+- Final pasted text removes boundary control phrases such as `Siri stop`.
