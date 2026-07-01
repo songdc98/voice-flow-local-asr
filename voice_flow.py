@@ -71,6 +71,20 @@ def voice_trigger_config(config: dict[str, Any]) -> dict[str, Any]:
             "finish recording",
             "结束",
         ],
+        "stop_cleanup_phrases": [
+            "series stop",
+            "serious stop",
+            "siri's stop",
+            "siri’s stop",
+            "series over",
+            "serious over",
+            "siri's over",
+            "siri’s over",
+            "series out",
+            "serious out",
+            "siri's out",
+            "siri’s out",
+        ],
         "stop_phrase": "结束",
     }
     defaults.update(config.get("voice_trigger", {}))
@@ -88,6 +102,18 @@ def stop_control_phrases(trigger_config: dict[str, Any]) -> list[str]:
         "stop_phrase",
         ["siri over", "siri out", "siri stop", "stop siri", "stop recording", "done recording", "finish recording", "结束"],
     )
+
+
+def stop_cleanup_phrases(trigger_config: dict[str, Any]) -> list[str]:
+    return control_phrases(trigger_config, "stop_cleanup_phrases", "", [])
+
+
+def unique_phrases(phrases: list[str]) -> list[str]:
+    deduped: list[str] = []
+    for phrase in phrases:
+        if phrase and phrase not in deduped:
+            deduped.append(phrase)
+    return deduped
 
 
 def control_phrases(
@@ -141,7 +167,8 @@ def strip_edge_control_phrases(text: str, phrases: list[str], side: str) -> str:
 
 def strip_voice_control_phrases(text: str, config: dict[str, Any]) -> str:
     trigger_config = voice_trigger_config(config)
-    cleaned = strip_edge_control_phrases(text, stop_control_phrases(trigger_config), "end")
+    stop_phrases = unique_phrases(stop_control_phrases(trigger_config) + stop_cleanup_phrases(trigger_config))
+    cleaned = strip_edge_control_phrases(text, stop_phrases, "end")
     return strip_edge_control_phrases(cleaned, wake_control_phrases(trigger_config), "start")
 
 
@@ -406,7 +433,7 @@ def build_prompt(transcript: str, config: dict[str, Any], mode: str) -> str:
     detail_level = config.get("detail_preservation", "high")
     trigger_config = voice_trigger_config(config)
     wake_phrases = "、".join(wake_control_phrases(trigger_config))
-    stop_phrases = "、".join(stop_control_phrases(trigger_config))
+    stop_phrases = "、".join(unique_phrases(stop_control_phrases(trigger_config) + stop_cleanup_phrases(trigger_config)))
     if mode == "raw":
         return transcript
     if mode == "polish_zh":

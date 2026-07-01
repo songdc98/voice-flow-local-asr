@@ -73,6 +73,20 @@
       "finish recording",
       "结束"
     ],
+    "stop_cleanup_phrases": [
+      "series stop",
+      "serious stop",
+      "siri's stop",
+      "siri’s stop",
+      "series over",
+      "serious over",
+      "siri's over",
+      "siri’s over",
+      "series out",
+      "serious out",
+      "siri's out",
+      "siri’s out"
+    ],
     "stop_phrase": "结束"
   },
   "hud": {

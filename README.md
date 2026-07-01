@@ -128,6 +128,8 @@ trigger logs:
 - wake phrases: `hey siri`, `hei siri`, `siri`
 - stop phrases: `siri over`, `siri out`, `siri stop`, `stop siri`,
   `stop recording`, `done recording`, `finish recording`, `结束`
+- cleanup aliases such as `series stop` and `serious stop` are removed from the
+  final text if ASR writes them at the transcript boundary.
 
 The intended flow is:
 

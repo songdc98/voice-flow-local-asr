@@ -204,6 +204,8 @@ Decision:
 - Keep `Page Down` as the reliable fallback.
 - Strip wake/stop control phrases at transcript boundaries after ASR and again
   after LLM post-processing.
+- Add cleanup-only aliases such as `series stop` and `serious stop` because ASR
+  can miswrite the spoken command `siri stop`.
 - Document that macOS privacy indicators cannot be hidden by the app through
   normal APIs.
 
