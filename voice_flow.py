@@ -95,6 +95,41 @@ def control_phrases(
     return deduped or fallback
 
 
+def phrase_to_edge_pattern(phrase: str) -> str:
+    phrase = phrase.strip()
+    ascii_tokens = phrase.split()
+    if ascii_tokens and all(re.fullmatch(r"[A-Za-z0-9]+", token) for token in ascii_tokens):
+        separator = r"[\s,，.。!！?？:：;；、\-_'\"]+"
+        body = separator.join(re.escape(token) for token in ascii_tokens)
+        return rf"(?<![A-Za-z0-9]){body}(?![A-Za-z0-9])"
+    return re.escape(phrase)
+
+
+def strip_edge_control_phrases(text: str, phrases: list[str], side: str) -> str:
+    phrases = [phrase.strip() for phrase in phrases if phrase.strip()]
+    if not phrases:
+        return text.strip()
+    alternatives = "|".join(phrase_to_edge_pattern(phrase) for phrase in sorted(phrases, key=len, reverse=True))
+    edge = r"[\s,，.。!！?？:：;；、\-_'\"]*"
+    if side == "start":
+        pattern = re.compile(rf"^{edge}(?:{alternatives}){edge}", flags=re.IGNORECASE)
+    else:
+        pattern = re.compile(rf"{edge}(?:{alternatives}){edge}$", flags=re.IGNORECASE)
+
+    previous = None
+    cleaned = text.strip()
+    while cleaned and cleaned != previous:
+        previous = cleaned
+        cleaned = pattern.sub("", cleaned).strip()
+    return cleaned
+
+
+def strip_voice_control_phrases(text: str, config: dict[str, Any]) -> str:
+    trigger_config = voice_trigger_config(config)
+    cleaned = strip_edge_control_phrases(text, stop_control_phrases(trigger_config), "end")
+    return strip_edge_control_phrases(cleaned, wake_control_phrases(trigger_config), "start")
+
+
 def notify(message: str, config: dict[str, Any]) -> None:
     print(message, flush=True)
     if not config.get("notify", True):
@@ -489,7 +524,9 @@ def process_audio(
     context = active_context if active_context is not None else detected_context
     transcript = run_asr(audio_path, config, profile=profile)
     transcript = apply_corrections(transcript, config)
+    transcript = strip_voice_control_phrases(transcript, config)
     final_text = run_llm(transcript, config, mode=resolved_mode)
+    final_text = strip_voice_control_phrases(final_text, config)
     copy_and_maybe_paste(final_text, paste, copy=copy)
 
     write_run_log(
