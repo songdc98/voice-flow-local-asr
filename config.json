@@ -45,7 +45,7 @@
     "Mic Mini",
     "DJI"
   ],
-  "max_record_seconds": 180,
+  "max_record_seconds": 1200,
   "min_record_seconds": 0.35,
   "asr_timeout_seconds": 300,
   "llm_timeout_seconds": 120,
@@ -58,10 +58,10 @@
   },
   "hud": {
     "enabled": true,
-    "size": 56,
+    "size": 112,
     "position": "bottom_center",
     "margin_x": 34,
-    "margin_y": 56,
+    "margin_y": 64,
     "poll_interval_seconds": 0.06
   },
   "retention": {

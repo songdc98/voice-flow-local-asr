@@ -13,14 +13,19 @@ from AppKit import (
     NSBackingStoreBuffered,
     NSBezierPath,
     NSBorderlessWindowMask,
+    NSCenterTextAlignment,
     NSColor,
+    NSFont,
+    NSFontAttributeName,
     NSGraphicsContext,
+    NSForegroundColorAttributeName,
     NSApp,
     NSApplication,
     NSApplicationActivationPolicyAccessory,
     NSEvent,
     NSMakeRect,
     NSScreen,
+    NSParagraphStyleAttributeName,
     NSTimer,
     NSView,
     NSWindow,
@@ -28,7 +33,7 @@ from AppKit import (
     NSWindowCollectionBehaviorFullScreenAuxiliary,
     NSFloatingWindowLevel,
 )
-from Foundation import NSObject
+from Foundation import NSMutableParagraphStyle, NSObject, NSString
 import objc
 
 
@@ -52,8 +57,9 @@ class VoiceHUDView(NSView):
     level = 0.0
     display_level = 0.0
     state = "idle"
+    elapsed_seconds = 0.0
 
-    def setLevel_state_(self, level, state):
+    def setLevel_state_elapsed_(self, level, state, elapsed):
         target = max(0.0, min(float(level), 1.0))
         next_state = str(state)
         if next_state != self.state:
@@ -62,13 +68,23 @@ class VoiceHUDView(NSView):
             self.display_level = self.display_level * 0.72 + target * 0.28
         self.level = target
         self.state = next_state
+        self.elapsed_seconds = max(0.0, float(elapsed))
         self.setNeedsDisplay_(True)
+
+    def formatted_elapsed(self):
+        total = int(self.elapsed_seconds)
+        hours = total // 3600
+        minutes = (total % 3600) // 60
+        seconds = total % 60
+        if hours:
+            return f"{hours}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes}:{seconds:02d}"
 
     def drawRect_(self, dirty_rect):
         bounds = self.bounds()
         w = bounds.size.width
         h = bounds.size.height
-        center_y = h / 2
+        wave_center_y = h * 0.70
 
         inset = max(1.0, min(w, h) * 0.06)
         circle_rect = NSMakeRect(inset, inset, w - inset * 2, h - inset * 2)
@@ -95,23 +111,35 @@ class VoiceHUDView(NSView):
 
         level = 0.18 if self.state == "processing" else self.display_level
         alpha = 0.78 if self.state != "processing" else 0.58
-        start_x = w * 0.22
-        step = w * 0.056
+        start_x = w * 0.20
+        step = w * 0.060
         quiet = level < 0.045 and self.state != "processing"
-        amp = h * (0.05 + level * 0.28)
+        amp = h * (0.035 + level * 0.16)
 
         values = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] if quiet else [
             0.00, 0.00, -0.20, 0.55, -0.72, 0.98, -0.52, 0.35, -0.12, 0.00, 0.00
         ]
         path = NSBezierPath.bezierPath()
-        path.moveToPoint_((start_x, center_y))
+        path.moveToPoint_((start_x, wave_center_y))
         for index, value in enumerate(values[1:], start=1):
-            path.lineToPoint_((start_x + step * index, center_y + amp * value))
-        path.setLineWidth_(max(1.6, w * 0.032))
+            path.lineToPoint_((start_x + step * index, wave_center_y + amp * value))
+        path.setLineWidth_(max(2.0, w * 0.028))
         path.setLineCapStyle_(1)
         path.setLineJoinStyle_(1)
         NSColor.colorWithCalibratedWhite_alpha_(0.03, alpha).setStroke()
         path.stroke()
+
+        paragraph = NSMutableParagraphStyle.alloc().init()
+        paragraph.setAlignment_(NSCenterTextAlignment)
+        font_size = max(15.0, min(24.0, w * 0.19))
+        attrs = {
+            NSFontAttributeName: NSFont.monospacedDigitSystemFontOfSize_weight_(font_size, 0.55),
+            NSForegroundColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(0.04, 0.88),
+            NSParagraphStyleAttributeName: paragraph,
+        }
+        text = NSString.stringWithString_(self.formatted_elapsed())
+        text_rect = NSMakeRect(w * 0.08, h * 0.13, w * 0.84, h * 0.30)
+        text.drawInRect_withAttributes_(text_rect, attrs)
 
 
 class VoiceFlowApp(NSObject):
@@ -203,7 +231,11 @@ class VoiceFlowApp(NSObject):
 
         if state in {"recording", "processing"}:
             self.position_hud()
-            self.hud_view.setLevel_state_(float(status.get("level", 0.0)), state)
+            self.hud_view.setLevel_state_elapsed_(
+                float(status.get("level", 0.0)),
+                state,
+                float(status.get("elapsed_seconds", 0.0)),
+            )
             self.hud_window.orderFrontRegardless()
         else:
             self.hud_window.orderOut_(None)

@@ -70,7 +70,13 @@ def notify(message: str, config: dict[str, Any]) -> None:
         pass
 
 
-def write_status(state: str, config: dict[str, Any], level: float = 0.0, message: str = "") -> None:
+def write_status(
+    state: str,
+    config: dict[str, Any],
+    level: float = 0.0,
+    message: str = "",
+    elapsed_seconds: float | None = None,
+) -> None:
     if not config.get("hud", {}).get("enabled", True):
         return
     payload = {
@@ -79,6 +85,8 @@ def write_status(state: str, config: dict[str, Any], level: float = 0.0, message
         "message": message,
         "updated_at": time.time(),
     }
+    if elapsed_seconds is not None:
+        payload["elapsed_seconds"] = max(0.0, float(elapsed_seconds))
     tmp_path = STATUS_PATH.with_suffix(".tmp")
     try:
         tmp_path.write_text(json.dumps(payload), encoding="utf-8")
@@ -549,7 +557,12 @@ class Recorder:
                 if now - self.last_level_update >= 0.06:
                     rms = float(np.sqrt(np.mean(np.square(mono.astype(np.float32)))))
                     level = min(1.0, rms * 9.0)
-                    write_status("recording", self.config, level=level)
+                    write_status(
+                        "recording",
+                        self.config,
+                        level=level,
+                        elapsed_seconds=now - self.started_at,
+                    )
                     self.last_level_update = now
                 if should_stop:
                     threading.Thread(target=lambda: self.toggle(self.paste_when_done), daemon=True).start()
@@ -563,7 +576,7 @@ class Recorder:
             )
             self.stream.start()
             self.recording = True
-            write_status("recording", self.config, level=0.0)
+            write_status("recording", self.config, level=0.0, elapsed_seconds=0.0)
             notify(f"Recording as {self.current_mode}...", self.config)
         except Exception:
             stream = self.stream
@@ -613,7 +626,7 @@ class Recorder:
 
         self.restore_system_audio()
         self.processing = True
-        write_status("processing", self.config, level=0.0)
+        write_status("processing", self.config, level=0.0, elapsed_seconds=duration)
         notify(f"Processing as {self.current_mode}...", self.config)
         threading.Thread(
             target=self._process_background,

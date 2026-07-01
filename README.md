@@ -15,6 +15,7 @@ The default workflow is designed for coding assistants and chat apps:
 - Press `Page Up` for copy-only mode.
 - While recording, the system output volume is temporarily ducked to make the
   recording state obvious and reduce background media noise.
+- The HUD shows a live audio waveform and elapsed recording time.
 
 ## One-Command Install
 
@@ -94,6 +95,9 @@ Supported explicit modes:
 
 Edit `config.json` to change the default mode, hotwords, corrections, retention
 policy, volume ducking, or model settings.
+
+The default maximum recording length is `1200` seconds, or 20 minutes. Change
+`max_record_seconds` if you need a shorter or longer safety limit.
 
 The `audio_ducking` block controls the recording-time system volume reduction:
 
