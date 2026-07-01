@@ -110,6 +110,11 @@ Supported explicit modes:
 Edit `config.json` to change the default mode, hotwords, corrections, retention
 policy, volume ducking, or model settings.
 
+By default, Voice Flow follows the current macOS default input device at the
+start of each recording. If a wireless microphone receiver remains plugged in
+but the transmitter battery dies, switch the macOS input device to the MacBook
+microphone; the next recording will use that system-selected microphone.
+
 The default maximum recording length is `1200` seconds, or 20 minutes. Change
 `max_record_seconds` if you need a shorter or longer safety limit.
 

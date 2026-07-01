@@ -39,6 +39,7 @@
   "sample_rate": 16000,
   "channels": 1,
   "audio_device": null,
+  "prefer_system_default_input": true,
   "preferred_input_names": [
     "DJI Mic Mini",
     "DJI Mic",

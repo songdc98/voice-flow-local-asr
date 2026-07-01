@@ -658,6 +658,7 @@ class Recorder:
         self.paste_when_done = paste
         self.samples_written = 0
         self.started_at = time.time()
+        self.device, self.device_label = resolve_audio_device(self.config)
         self.current_mode, self.current_context = resolve_output_mode(self.config, None)
         self.duck_system_audio()
         try:
@@ -815,12 +816,22 @@ def resolve_audio_device(config: dict[str, Any]) -> tuple[int | str | None, str]
     if configured is not None:
         return configured, f"configured device: {configured}"
 
-    preferred_names = [name.lower() for name in config.get("preferred_input_names", [])]
     try:
         devices = sd.query_devices()
     except Exception:
         return None, "system default input"
 
+    if config.get("prefer_system_default_input", True):
+        try:
+            default_input = sd.query_devices(kind="input")
+            index = int(default_input.get("index", -1))
+            name = str(default_input.get("name", "system default input"))
+            if index >= 0 and int(default_input.get("max_input_channels", 0)) > 0:
+                return index, f"{name} (system default)"
+        except Exception:
+            pass
+
+    preferred_names = [name.lower() for name in config.get("preferred_input_names", [])]
     for index, device in enumerate(devices):
         if int(device.get("max_input_channels", 0)) <= 0:
             continue
