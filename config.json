@@ -64,6 +64,8 @@
       "siri"
     ],
     "stop_phrases": [
+      "siri over",
+      "siri out",
       "siri stop",
       "stop siri",
       "stop recording",

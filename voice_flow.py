@@ -61,7 +61,16 @@ def voice_trigger_config(config: dict[str, Any]) -> dict[str, Any]:
     defaults = {
         "enabled": True,
         "wake_phrases": ["hey siri", "hei siri", "siri"],
-        "stop_phrases": ["siri stop", "stop siri", "stop recording", "done recording", "finish recording", "结束"],
+        "stop_phrases": [
+            "siri over",
+            "siri out",
+            "siri stop",
+            "stop siri",
+            "stop recording",
+            "done recording",
+            "finish recording",
+            "结束",
+        ],
         "stop_phrase": "结束",
     }
     defaults.update(config.get("voice_trigger", {}))
@@ -77,7 +86,7 @@ def stop_control_phrases(trigger_config: dict[str, Any]) -> list[str]:
         trigger_config,
         "stop_phrases",
         "stop_phrase",
-        ["siri stop", "stop siri", "stop recording", "done recording", "finish recording", "结束"],
+        ["siri over", "siri out", "siri stop", "stop siri", "stop recording", "done recording", "finish recording", "结束"],
     )
 
 
@@ -108,7 +117,7 @@ def phrase_to_edge_pattern(phrase: str) -> str:
         separator = r"[\s,，.。!！?？:：;；、\-_'\"]+"
         body = separator.join(re.escape(token) for token in ascii_tokens)
         return rf"(?<![A-Za-z0-9]){body}(?![A-Za-z0-9])"
-    return re.escape(phrase)
+    return rf"(?<![A-Za-z0-9\u4e00-\u9fff]){re.escape(phrase)}(?![A-Za-z0-9\u4e00-\u9fff])"
 
 
 def strip_edge_control_phrases(text: str, phrases: list[str], side: str) -> str:

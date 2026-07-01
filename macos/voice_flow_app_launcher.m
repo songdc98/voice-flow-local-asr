@@ -132,7 +132,7 @@ static OSStatus VoiceFlowHotKeyHandler(
         [stopPhrases addObject:legacyStop];
     }
     if (stopPhrases.count == 0) {
-        [stopPhrases addObjectsFromArray:@[@"siri stop", @"stop siri", @"stop recording", @"done recording"]];
+        [stopPhrases addObjectsFromArray:@[@"siri over", @"siri out", @"siri stop", @"stop siri", @"stop recording", @"done recording"]];
     }
 
     self.wakePhrases = wakePhrases;

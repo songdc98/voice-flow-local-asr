@@ -197,7 +197,10 @@ Decision:
 - Use macOS `NSSpeechRecognizer` for fixed commands so the wake layer saves no
   audio, templates, or trigger logs.
 - Use English command phrases that the system recognizer handles more reliably:
-  `siri`, `hey siri`, `siri stop`, and `stop siri`.
+  `siri`, `hey siri`, `siri over`, `siri stop`, and `stop siri`.
+- Prefer `siri over` as the recommended stop command because `over` is a
+  distinct two-syllable radio-style ending cue. Keep `siri out` as a semantic
+  one-way-session backup, but avoid bare `over` or `out` to reduce false stops.
 - Keep `Page Down` as the reliable fallback.
 - Strip wake/stop control phrases at transcript boundaries after ASR and again
   after LLM post-processing.
@@ -207,5 +210,6 @@ Decision:
 Representative output:
 
 - `siri` wakes recording.
-- `siri stop` stops recording more reliably than the Chinese `结束` command.
+- `siri over` and `siri stop` stop recording more reliably than the Chinese
+  `结束` command.
 - Final pasted text removes boundary control phrases such as `Siri stop`.
