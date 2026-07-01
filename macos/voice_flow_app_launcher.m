@@ -11,7 +11,7 @@
 @property(nonatomic, assign) NSTimeInterval lastPasteRequestTime;
 @property(nonatomic, copy) NSString *projectDir;
 @property(nonatomic, copy) NSArray<NSString *> *wakePhrases;
-@property(nonatomic, copy) NSString *stopPhrase;
+@property(nonatomic, copy) NSArray<NSString *> *stopPhrases;
 - (void)sendVoiceSignal:(int)signalNumber;
 @end
 
@@ -90,25 +90,42 @@ static OSStatus VoiceFlowHotKeyHandler(
 
 - (void)loadVoiceTriggerPhrases {
     NSDictionary *voiceTrigger = [self voiceTriggerConfig];
-    NSMutableArray<NSString *> *phrases = [NSMutableArray array];
+    NSMutableArray<NSString *> *wakePhrases = [NSMutableArray array];
     id configuredPhrases = voiceTrigger[@"wake_phrases"];
     if ([configuredPhrases isKindOfClass:[NSArray class]]) {
         for (id item in configuredPhrases) {
-            if ([item isKindOfClass:[NSString class]] && [item length] > 0 && ![phrases containsObject:item]) {
-                [phrases addObject:item];
+            if ([item isKindOfClass:[NSString class]] && [item length] > 0 && ![wakePhrases containsObject:item]) {
+                [wakePhrases addObject:item];
             }
         }
     }
     NSString *legacyWake = voiceTrigger[@"wake_phrase"];
-    if (legacyWake.length > 0 && ![phrases containsObject:legacyWake]) {
-        [phrases addObject:legacyWake];
+    if (legacyWake.length > 0 && ![wakePhrases containsObject:legacyWake]) {
+        [wakePhrases addObject:legacyWake];
     }
-    if (phrases.count == 0) {
-        [phrases addObjectsFromArray:@[@"hey siri", @"siri"]];
+    if (wakePhrases.count == 0) {
+        [wakePhrases addObjectsFromArray:@[@"hey siri", @"siri"]];
     }
-    NSString *stop = voiceTrigger[@"stop_phrase"];
-    self.wakePhrases = phrases;
-    self.stopPhrase = stop.length > 0 ? stop : @"结束";
+
+    NSMutableArray<NSString *> *stopPhrases = [NSMutableArray array];
+    id configuredStopPhrases = voiceTrigger[@"stop_phrases"];
+    if ([configuredStopPhrases isKindOfClass:[NSArray class]]) {
+        for (id item in configuredStopPhrases) {
+            if ([item isKindOfClass:[NSString class]] && [item length] > 0 && ![stopPhrases containsObject:item]) {
+                [stopPhrases addObject:item];
+            }
+        }
+    }
+    NSString *legacyStop = voiceTrigger[@"stop_phrase"];
+    if (legacyStop.length > 0 && ![stopPhrases containsObject:legacyStop]) {
+        [stopPhrases addObject:legacyStop];
+    }
+    if (stopPhrases.count == 0) {
+        [stopPhrases addObjectsFromArray:@[@"siri stop", @"stop siri", @"stop recording", @"done recording"]];
+    }
+
+    self.wakePhrases = wakePhrases;
+    self.stopPhrases = stopPhrases;
 }
 
 - (NSString *)currentVoiceFlowState {
@@ -155,7 +172,7 @@ static OSStatus VoiceFlowHotKeyHandler(
         return;
     }
 
-    self.speechRecognizer.commands = [self.wakePhrases arrayByAddingObject:self.stopPhrase];
+    self.speechRecognizer.commands = [self.wakePhrases arrayByAddingObjectsFromArray:self.stopPhrases];
     self.speechRecognizer.delegate = self;
     self.speechRecognizer.listensInForegroundOnly = NO;
     [self.speechRecognizer startListening];
@@ -181,7 +198,7 @@ static OSStatus VoiceFlowHotKeyHandler(
         return;
     }
 
-    if ([command isEqualToString:self.stopPhrase]) {
+    if ([self.stopPhrases containsObject:command]) {
         if ([state isEqualToString:@"recording"]) {
             [self sendVoiceSignal:SIGUSR1];
         }

@@ -63,6 +63,14 @@
       "hei siri",
       "siri"
     ],
+    "stop_phrases": [
+      "siri stop",
+      "stop siri",
+      "stop recording",
+      "done recording",
+      "finish recording",
+      "结束"
+    ],
     "stop_phrase": "结束"
   },
   "hud": {

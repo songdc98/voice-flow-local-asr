@@ -17,7 +17,7 @@ The default workflow is designed for coding assistants and chat apps:
   recording state obvious and reduce background media noise.
 - The HUD shows a live audio waveform and elapsed recording time.
 - Experimental voice trigger mode can wake recording with `hey siri` / `siri` and stop
-  with `结束`.
+  with `siri stop` / `stop siri`.
 
 ## One-Command Install
 
@@ -115,7 +115,8 @@ recognition for two commands and does not save wake-word audio, templates, or
 trigger logs:
 
 - wake phrases: `hey siri`, `hei siri`, `siri`
-- stop phrase: `结束`
+- stop phrases: `siri stop`, `stop siri`, `stop recording`, `done recording`,
+  `finish recording`, `结束`
 
 The intended flow is:
 
@@ -123,7 +124,7 @@ The intended flow is:
 2. Say `hey siri` or `siri`.
 3. Wait for the HUD and volume ducking.
 4. Speak the message.
-5. Say `结束`.
+5. Say `siri stop` or `stop siri`.
 6. Voice Flow stops recording, transcribes, cleans, copies, and pastes.
 
 `Page Down` and `Page Up` remain available as reliable fallback controls. The

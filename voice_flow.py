@@ -55,6 +55,7 @@ def voice_trigger_config(config: dict[str, Any]) -> dict[str, Any]:
     defaults = {
         "enabled": True,
         "wake_phrases": ["hey siri", "hei siri", "siri"],
+        "stop_phrases": ["siri stop", "stop siri", "stop recording", "done recording", "finish recording", "结束"],
         "stop_phrase": "结束",
     }
     defaults.update(config.get("voice_trigger", {}))
@@ -62,18 +63,36 @@ def voice_trigger_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def wake_control_phrases(trigger_config: dict[str, Any]) -> list[str]:
+    return control_phrases(trigger_config, "wake_phrases", "wake_phrase", ["hey siri", "siri"])
+
+
+def stop_control_phrases(trigger_config: dict[str, Any]) -> list[str]:
+    return control_phrases(
+        trigger_config,
+        "stop_phrases",
+        "stop_phrase",
+        ["siri stop", "stop siri", "stop recording", "done recording", "finish recording", "结束"],
+    )
+
+
+def control_phrases(
+    trigger_config: dict[str, Any],
+    array_key: str,
+    legacy_key: str,
+    fallback: list[str],
+) -> list[str]:
     phrases: list[str] = []
-    configured = trigger_config.get("wake_phrases", [])
+    configured = trigger_config.get(array_key, [])
     if isinstance(configured, list):
         phrases.extend(str(item) for item in configured if str(item).strip())
-    legacy = str(trigger_config.get("wake_phrase", "")).strip()
+    legacy = str(trigger_config.get(legacy_key, "")).strip()
     if legacy:
         phrases.append(legacy)
     deduped: list[str] = []
     for phrase in phrases:
         if phrase not in deduped:
             deduped.append(phrase)
-    return deduped or ["hey siri", "siri"]
+    return deduped or fallback
 
 
 def notify(message: str, config: dict[str, Any]) -> None:
@@ -337,7 +356,7 @@ def build_prompt(transcript: str, config: dict[str, Any], mode: str) -> str:
     detail_level = config.get("detail_preservation", "high")
     trigger_config = voice_trigger_config(config)
     wake_phrases = "、".join(wake_control_phrases(trigger_config))
-    stop_phrase = trigger_config.get("stop_phrase", "结束")
+    stop_phrases = "、".join(stop_control_phrases(trigger_config))
     if mode == "raw":
         return transcript
     if mode == "polish_zh":
@@ -362,7 +381,7 @@ def build_prompt(transcript: str, config: dict[str, Any], mode: str) -> str:
 - 细节保留等级：{detail_level}。不要总结，不要压缩成任务清单，不要替用户规划方案；保留用户明确说出的目标、约束、原因、担忧、例子、对比、偏好、否定条件和不确定性。
 - 可以合并相邻的重复短句，但不能删除任何实质性信息。
 - 可以整理标点和分段，但不要改变原意和信息顺序。
-- 如果语音稿开头或结尾包含语音控制词“{wake_phrases}”或“{stop_phrase}”，删除这些控制词，不要把它们当作用户正文。
+- 如果语音稿开头或结尾包含语音控制词“{wake_phrases}”或“{stop_phrases}”，删除这些控制词，不要把它们当作用户正文。
 - 严禁添加用户没有明确说出的实现语言、框架、测试指标、JSON 格式、API 设计、验收标准、实验计划或新需求。
 
 语音识别稿：
