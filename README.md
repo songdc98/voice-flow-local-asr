@@ -1,11 +1,11 @@
 # Voice Flow
 
-[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-000000?style=flat&logo=apple&logoColor=white)](https://www.apple.com/macos/)
-[![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![ASR](https://img.shields.io/badge/ASR-Qwen3--ASR-7C3AED?style=flat)](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit)
-[![Local](https://img.shields.io/badge/processing-local-16803C?style=flat)](#privacy)
-[![License](https://img.shields.io/github/license/songdc98/voice-flow-local-asr?style=flat)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/songdc98/voice-flow-local-asr?style=flat&logo=github)](https://github.com/songdc98/voice-flow-local-asr/stargazers)
+[![Platform](assets/badges/macos.svg)](https://www.apple.com/macos/)
+[![Python](assets/badges/python.svg)](https://www.python.org/)
+[![ASR](assets/badges/qwen3-asr.svg)](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit)
+[![Processing](assets/badges/local.svg)](#privacy)
+[![Output](assets/badges/raw-transcript.svg)](#use)
+[![License](assets/badges/mit.svg)](LICENSE)
 
 Local macOS dictation for Chinese and Chinese-English mixed speech.
 Press `Page Down` to record, press it again to stop, then Voice Flow copies the
