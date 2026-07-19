@@ -3,15 +3,12 @@
 #import <AVFoundation/AVFoundation.h>
 #import <signal.h>
 
-@interface VoiceFlowLauncherDelegate : NSObject <NSApplicationDelegate, NSSpeechRecognizerDelegate>
+@interface VoiceFlowLauncherDelegate : NSObject <NSApplicationDelegate>
 @property(nonatomic, strong) NSTask *task;
-@property(nonatomic, strong) NSSpeechRecognizer *speechRecognizer;
 @property(nonatomic, assign) EventHotKeyRef recordHotKey;
 @property(nonatomic, assign) EventHotKeyRef copyHotKey;
 @property(nonatomic, assign) NSTimeInterval lastPasteRequestTime;
 @property(nonatomic, copy) NSString *projectDir;
-@property(nonatomic, copy) NSArray<NSString *> *wakePhrases;
-@property(nonatomic, copy) NSArray<NSString *> *stopPhrases;
 - (void)sendVoiceSignal:(int)signalNumber;
 @end
 
@@ -51,7 +48,7 @@ static OSStatus VoiceFlowHotKeyHandler(
     if (configured.length > 0) {
         return [configured stringByStandardizingPath];
     }
-    return @"/Users/song/Research/local_asr_qwen3";
+    return [[NSFileManager defaultManager] currentDirectoryPath];
 }
 
 - (NSString *)pathInProject:(NSString *)relativePath {
@@ -69,94 +66,6 @@ static OSStatus VoiceFlowHotKeyHandler(
                                                     error:nil];
 }
 
-- (NSDictionary *)configDictionary {
-    NSData *data = [NSData dataWithContentsOfFile:[self pathInProject:@"config.json"]];
-    if (data == nil) {
-        return @{};
-    }
-    NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:data
-                                                            options:0
-                                                              error:nil];
-    if (![payload isKindOfClass:[NSDictionary class]]) {
-        return @{};
-    }
-    return payload;
-}
-
-- (NSDictionary *)voiceTriggerConfig {
-    NSDictionary *voiceTrigger = [self configDictionary][@"voice_trigger"];
-    if (![voiceTrigger isKindOfClass:[NSDictionary class]]) {
-        return @{};
-    }
-    return voiceTrigger;
-}
-
-- (BOOL)voiceTriggerEnabled {
-    id enabled = [self voiceTriggerConfig][@"enabled"];
-    if (enabled == nil) {
-        return YES;
-    }
-    return [enabled boolValue];
-}
-
-- (void)loadVoiceTriggerPhrases {
-    NSDictionary *voiceTrigger = [self voiceTriggerConfig];
-    NSMutableArray<NSString *> *wakePhrases = [NSMutableArray array];
-    id configuredPhrases = voiceTrigger[@"wake_phrases"];
-    if ([configuredPhrases isKindOfClass:[NSArray class]]) {
-        for (id item in configuredPhrases) {
-            if ([item isKindOfClass:[NSString class]] && [item length] > 0 && ![wakePhrases containsObject:item]) {
-                [wakePhrases addObject:item];
-            }
-        }
-    }
-    NSString *legacyWake = voiceTrigger[@"wake_phrase"];
-    if (legacyWake.length > 0 && ![wakePhrases containsObject:legacyWake]) {
-        [wakePhrases addObject:legacyWake];
-    }
-    if (wakePhrases.count == 0) {
-        [wakePhrases addObjectsFromArray:@[@"hey siri", @"siri"]];
-    }
-
-    NSMutableArray<NSString *> *stopPhrases = [NSMutableArray array];
-    id configuredStopPhrases = voiceTrigger[@"stop_phrases"];
-    if ([configuredStopPhrases isKindOfClass:[NSArray class]]) {
-        for (id item in configuredStopPhrases) {
-            if ([item isKindOfClass:[NSString class]] && [item length] > 0 && ![stopPhrases containsObject:item]) {
-                [stopPhrases addObject:item];
-            }
-        }
-    }
-    NSString *legacyStop = voiceTrigger[@"stop_phrase"];
-    if (legacyStop.length > 0 && ![stopPhrases containsObject:legacyStop]) {
-        [stopPhrases addObject:legacyStop];
-    }
-    if (stopPhrases.count == 0) {
-        [stopPhrases addObjectsFromArray:@[@"siri over", @"siri out", @"siri stop", @"stop siri", @"stop recording", @"done recording"]];
-    }
-
-    self.wakePhrases = wakePhrases;
-    self.stopPhrases = stopPhrases;
-}
-
-- (NSString *)currentVoiceFlowState {
-    NSData *data = [NSData dataWithContentsOfFile:[self pathInRuntime:@"voice_flow_status.json"]];
-    if (data == nil) {
-        return @"idle";
-    }
-    NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:data
-                                                            options:0
-                                                              error:nil];
-    if (![payload isKindOfClass:[NSDictionary class]]) {
-        return @"idle";
-    }
-    NSString *state = payload[@"state"];
-    if (![state isKindOfClass:[NSString class]] || state.length == 0) {
-        return @"idle";
-    }
-    return state;
-}
-
 - (pid_t)voiceFlowPID {
     NSString *pidPath = [self pathInRuntime:@"voice_flow.pid"];
     NSString *pidText = [NSString stringWithContentsOfFile:pidPath
@@ -169,50 +78,6 @@ static OSStatus VoiceFlowHotKeyHandler(
     pid_t pid = [self voiceFlowPID];
     if (pid > 1) {
         kill(pid, signalNumber);
-    }
-}
-
-- (void)startSpeechRecognizer {
-    if (![self voiceTriggerEnabled]) {
-        return;
-    }
-
-    [self loadVoiceTriggerPhrases];
-    self.speechRecognizer = [[NSSpeechRecognizer alloc] init];
-    if (self.speechRecognizer == nil) {
-        return;
-    }
-
-    self.speechRecognizer.commands = [self.wakePhrases arrayByAddingObjectsFromArray:self.stopPhrases];
-    self.speechRecognizer.delegate = self;
-    self.speechRecognizer.listensInForegroundOnly = NO;
-    [self.speechRecognizer startListening];
-}
-
-- (void)stopSpeechRecognizer {
-    if (self.speechRecognizer == nil) {
-        return;
-    }
-
-    [self.speechRecognizer stopListening];
-    self.speechRecognizer.delegate = nil;
-    self.speechRecognizer = nil;
-}
-
-- (void)speechRecognizer:(NSSpeechRecognizer *)sender didRecognizeCommand:(NSString *)command {
-    (void)sender;
-    NSString *state = [self currentVoiceFlowState];
-    if ([self.wakePhrases containsObject:command]) {
-        if (![state isEqualToString:@"recording"] && ![state isEqualToString:@"processing"]) {
-            [self sendVoiceSignal:SIGUSR1];
-        }
-        return;
-    }
-
-    if ([self.stopPhrases containsObject:command]) {
-        if ([state isEqualToString:@"recording"]) {
-            [self sendVoiceSignal:SIGUSR1];
-        }
     }
 }
 
@@ -335,9 +200,14 @@ static OSStatus VoiceFlowHotKeyHandler(
     return NO;
 }
 
-- (void)performPaste {
-    if ([self pasteViaAccessibility]) {
-        return;
+- (BOOL)pasteViaKeyboardShortcut {
+    NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+    NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+    if (text.length == 0) {
+        [self writePasteStatusWithMethod:@"empty_clipboard"
+                                  axCode:kAXErrorFailure
+                                 trusted:AXIsProcessTrusted()];
+        return NO;
     }
 
     CGEventRef keyDown = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)9, true);
@@ -345,7 +215,10 @@ static OSStatus VoiceFlowHotKeyHandler(
     if (keyDown == NULL || keyUp == NULL) {
         if (keyDown != NULL) CFRelease(keyDown);
         if (keyUp != NULL) CFRelease(keyUp);
-        return;
+        [self writePasteStatusWithMethod:@"cmd_v_event_failed"
+                                  axCode:kAXErrorFailure
+                                 trusted:AXIsProcessTrusted()];
+        return NO;
     }
 
     CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
@@ -355,8 +228,17 @@ static OSStatus VoiceFlowHotKeyHandler(
     CFRelease(keyDown);
     CFRelease(keyUp);
     [self writePasteStatusWithMethod:@"cmd_v_event"
-                              axCode:kAXErrorFailure
+                              axCode:kAXErrorSuccess
                              trusted:AXIsProcessTrusted()];
+    return YES;
+}
+
+- (void)performPaste {
+    if ([self pasteViaKeyboardShortcut]) {
+        return;
+    }
+
+    [self pasteViaAccessibility];
 }
 
 - (void)checkPasteRequest:(NSTimer *)timer {
@@ -414,12 +296,20 @@ static OSStatus VoiceFlowHotKeyHandler(
     }
 }
 
-- (void)killVoiceFlowWorkers {
+- (void)runPkillWithSignal:(NSString *)signalName
+                   pattern:(NSString *)pattern {
     NSTask *cleanup = [[NSTask alloc] init];
     cleanup.executableURL = [NSURL fileURLWithPath:@"/usr/bin/pkill"];
-    cleanup.arguments = @[@"-f", [self pathInProject:@"voice_flow.py"]];
+    cleanup.arguments = @[signalName, @"-f", pattern];
     [cleanup launchAndReturnError:nil];
     [cleanup waitUntilExit];
+}
+
+- (void)killVoiceFlowWorkers {
+    NSString *pattern = [self pathInProject:@"voice_flow.py"];
+    [self runPkillWithSignal:@"-TERM" pattern:pattern];
+    [NSThread sleepForTimeInterval:0.7];
+    [self runPkillWithSignal:@"-KILL" pattern:pattern];
 }
 
 - (void)launchWorker {
@@ -448,7 +338,6 @@ static OSStatus VoiceFlowHotKeyHandler(
     [self ignoreExistingPasteRequest];
     [self requestAccessibilityPrompt];
     [self installHotKeys];
-    [self startSpeechRecognizer];
     [NSTimer scheduledTimerWithTimeInterval:0.12
                                      target:self
                                    selector:@selector(checkPasteRequest:)
@@ -488,7 +377,6 @@ static OSStatus VoiceFlowHotKeyHandler(
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
     (void)sender;
-    [self stopSpeechRecognizer];
     [self uninstallHotKeys];
     if (self.task != nil && self.task.isRunning) {
         [self.task terminate];
@@ -499,7 +387,6 @@ static OSStatus VoiceFlowHotKeyHandler(
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
     (void)notification;
-    [self stopSpeechRecognizer];
     [self uninstallHotKeys];
     if (self.task != nil && self.task.isRunning) {
         [self.task terminate];

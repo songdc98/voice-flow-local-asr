@@ -1,94 +1,27 @@
 {
-  "record_hotkey": "<page_down>",
-  "copy_only_hotkey": "<page_up>",
-  "asr_profile": "balanced",
-  "output_mode": "auto",
-  "fallback_output_mode": "polish_zh",
-  "detail_preservation": "high",
-  "context_rules": [
-    {
-      "name": "Claude / Claude Code",
-      "output_mode": "code_prompt_en",
-      "match_any": [
-        "claude",
-        "anthropic",
-        "cloud code"
-      ]
-    },
-    {
-      "name": "Cursor / English coding agents",
-      "output_mode": "code_prompt_en",
-      "match_any": [
-        "cursor",
-        "windsurf",
-        "v0.dev",
-        "lovable"
-      ]
-    },
-    {
-      "name": "Codex / OpenAI",
-      "output_mode": "polish_zh",
-      "match_any": [
-        "codex",
-        "chatgpt",
-        "openai"
-      ]
-    }
-  ],
   "paste_after_stop": true,
   "sample_rate": 16000,
   "channels": 1,
   "audio_device": null,
   "prefer_system_default_input": true,
+  "input_probe": {
+    "enabled": true,
+    "seconds": 0.25,
+    "threshold": 0.00001
+  },
   "preferred_input_names": [
     "DJI Mic Mini",
     "DJI Mic",
     "Mic Mini",
     "DJI"
   ],
-  "max_record_seconds": 1200,
+  "max_record_seconds": 1800,
   "min_record_seconds": 0.35,
-  "asr_timeout_seconds": 300,
-  "llm_timeout_seconds": 120,
   "notify": false,
   "audio_ducking": {
     "enabled": true,
-    "factor": 0.5,
-    "restore_on_stop": true,
-    "min_nonzero_volume": 1
-  },
-  "voice_trigger": {
-    "enabled": true,
-    "wake_phrases": [
-      "hey siri",
-      "hei siri",
-      "siri"
-    ],
-    "stop_phrases": [
-      "siri over",
-      "siri out",
-      "siri stop",
-      "stop siri",
-      "stop recording",
-      "done recording",
-      "finish recording",
-      "结束"
-    ],
-    "stop_cleanup_phrases": [
-      "series stop",
-      "serious stop",
-      "siri's stop",
-      "siri’s stop",
-      "series over",
-      "serious over",
-      "siri's over",
-      "siri’s over",
-      "series out",
-      "serious out",
-      "siri's out",
-      "siri’s out"
-    ],
-    "stop_phrase": "结束"
+    "factor": 0.0,
+    "restore_on_stop": true
   },
   "hud": {
     "enabled": true,
@@ -132,19 +65,11 @@
     "withper": "Whisper"
   },
   "asr": {
-    "balanced": {
-      "engine": "qwen3",
-      "model": "mlx-community/Qwen3-ASR-1.7B-8bit",
-      "language": "zh",
-      "max_tokens": 1024,
-      "chunk_duration": 30
-    }
-  },
-  "llm": {
-    "enabled": true,
-    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
-    "fallback_model": "mlx-community/Qwen3-1.7B-4bit",
-    "max_tokens": 1400,
-    "temperature": 0
+    "model": "mlx-community/Qwen3-ASR-1.7B-8bit",
+    "language": "zh",
+    "max_tokens": 8192,
+    "chunk_duration": 30,
+    "long_audio_split_seconds": 360,
+    "timeout_seconds": 3600
   }
 }

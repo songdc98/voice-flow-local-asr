@@ -246,9 +246,10 @@ class VoiceFlowApp(NSObject):
         pass
 
     def stop_stale_voice_processes(self):
+        stale_pids = []
         try:
             result = subprocess.run(
-                ["ps", "-axo", "pid=,command="],
+                ["ps", "-axo", "pid=,stat=,command="],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
@@ -261,10 +262,13 @@ class VoiceFlowApp(NSObject):
             stripped = line.strip()
             if not stripped:
                 continue
-            pid_text, _, command = stripped.partition(" ")
+            pid_text, _, remainder = stripped.partition(" ")
+            stat, _, command = remainder.strip().partition(" ")
             try:
                 pid = int(pid_text)
             except ValueError:
+                continue
+            if stat.startswith("Z"):
                 continue
             if pid == os.getpid():
                 continue
@@ -272,13 +276,89 @@ class VoiceFlowApp(NSObject):
                 continue
             if str(VOICE_FLOW) not in command or "voice_flow_menu_app.py" in command:
                 continue
+            stale_pids.append(pid)
+
+        if not stale_pids:
+            return
+
+        for sig, wait_seconds in ((signal.SIGTERM, 1.2), (signal.SIGKILL, 0.6)):
+            for pid in stale_pids:
+                if not self.pid_alive(pid):
+                    continue
+                self.kill_process_group(pid, sig)
+
+            deadline = time.time() + wait_seconds
+            while time.time() < deadline:
+                if not any(self.pid_alive(pid) for pid in stale_pids):
+                    break
+                time.sleep(0.05)
+
+        try:
+            PID_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def pid_alive(self, pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except Exception:
+            return True
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "stat="],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            return True
+        return result.returncode == 0 and not result.stdout.strip().startswith("Z")
+
+    def kill_process_group(self, pid: int, sig: int) -> None:
+        try:
+            os.killpg(os.getpgid(pid), sig)
+        except Exception:
             try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
+                os.kill(pid, sig)
             except Exception:
+                pass
+
+    def clear_pid_file_if_matches(self, pid: int) -> None:
+        try:
+            recorded = int(PID_FILE.read_text(encoding="utf-8").strip())
+        except Exception:
+            return
+        if recorded == pid:
+            try:
+                PID_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def wait_for_child_ready(self, timeout: float = 6.0) -> bool:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.child is None:
+                return False
+            if self.child.poll() is not None:
+                self.clear_pid_file_if_matches(self.child.pid)
+                return False
+            try:
+                recorded = int(PID_FILE.read_text(encoding="utf-8").strip())
+            except Exception:
+                time.sleep(0.1)
+                continue
+            if recorded == self.child.pid:
+                return True
+            if not self.pid_alive(recorded):
                 try:
-                    os.kill(pid, signal.SIGTERM)
+                    PID_FILE.unlink(missing_ok=True)
                 except Exception:
                     pass
+            time.sleep(0.1)
+        return False
 
     def start_child(self):
         if self.child is not None and self.child.poll() is None:
@@ -300,7 +380,15 @@ class VoiceFlowApp(NSObject):
             env=env,
             start_new_session=True,
         )
-        PID_FILE.write_text(str(self.child.pid), encoding="utf-8")
+        if not self.wait_for_child_ready():
+            child = self.child
+            if child is not None and child.poll() is None:
+                self.kill_process_group(child.pid, signal.SIGKILL)
+            if child is not None:
+                self.clear_pid_file_if_matches(child.pid)
+            self.child = None
+            self.set_status("Stopped")
+            return
         self.set_status("Running")
 
     def stop_child(self):
@@ -344,6 +432,8 @@ class VoiceFlowApp(NSObject):
         if self.child.poll() is None:
             self.set_status("Running")
             return
+        self.clear_pid_file_if_matches(self.child.pid)
+        self.child = None
         self.set_status("Stopped")
 
     def send_notification(self, message: str):

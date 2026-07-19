@@ -21,6 +21,11 @@ fail() {
 command -v clang >/dev/null 2>&1 || fail "clang was not found. Install Xcode Command Line Tools first."
 [[ -f "$PROJECT_DIR/macos/voice_flow_app_launcher.m" ]] || fail "Missing macOS launcher source."
 
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | awk '/Developer ID Application:|Apple Development:/ {print $2; exit}')"
+fi
+
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 if [[ -x "$PROJECT_DIR/.venv/bin/python" ]]; then
@@ -62,10 +67,8 @@ payload = {
     "CFBundleShortVersionString": "1.0.0",
     "CFBundleVersion": "1",
     "LSMinimumSystemVersion": "14.0",
-    "NSAppleEventsUsageDescription": "Voice Flow reads the active app or browser tab to choose the right prompt style.",
     "NSHighResolutionCapable": True,
     "NSMicrophoneUsageDescription": "Voice Flow records your voice locally for speech-to-text dictation.",
-    "NSSpeechRecognitionUsageDescription": "Voice Flow listens locally for two voice commands to start and stop dictation.",
     "NSSupportsAutomaticTermination": False,
     "NSSupportsSuddenTermination": False,
     "VoiceFlowProjectPath": project_dir,
@@ -79,11 +82,13 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     --entitlements "$PROJECT_DIR/macos/VoiceFlow.entitlements" \
     --sign "$SIGN_IDENTITY" \
     "$APP_DIR"
+  info "Signed with: $SIGN_IDENTITY"
 else
   codesign --force --deep --options runtime \
     --entitlements "$PROJECT_DIR/macos/VoiceFlow.entitlements" \
     --sign - \
     "$APP_DIR"
+  info "Signed ad hoc."
 fi
 
 info "Built: $APP_DIR"
